@@ -3,9 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <title>DeepL用 改行ツール</title>
+
+  <!-- iPhoneでの表示を最適化するためのタグ -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <!-- もしホーム画面用アイコンを設定したい場合は以下を追加
+  <link rel="apple-touch-icon" href="icon.png" />
+  -->
+
   <style>
     body {
-      background-color: #333;  /* ダーク背景 */
+      background-color: #333; /* ダーク背景 */
       color: #fff;
       font-family: sans-serif;
       margin: 0;
@@ -24,6 +34,7 @@
       padding: 8px;
       border: none;
       border-radius: 4px;
+      box-sizing: border-box;
     }
     .buttons {
       display: flex;
@@ -56,6 +67,12 @@
     .copy-btn {
       background-color: #4CAF50;
       color: #fff;
+      width: 100%;
+      margin-bottom: 30px; /* 下に余白 */
+    }
+    /* コピー完了時の一時的な色変更用クラス */
+    .copied {
+      background-color: #00c853 !important; /* より明るい緑など */
     }
   </style>
 </head>
@@ -77,85 +94,100 @@
     <textarea id="outputText" placeholder="変換結果がここに表示されます"></textarea>
 
     <!-- コピー用ボタン -->
-    <button class="copy-btn" onclick="copyOutput()">コピー</button>
+    <button class="copy-btn" id="copyButton" onclick="copyOutput()">コピー</button>
   </div>
 
   <script>
+    // クリップボードからペースト
     function pasteText() {
-      // モバイル Safari などではクリップボードへのアクセスに制限があるため
-      // 実機で動かない可能性があります。iOSの場合は長押しのペーストが主になります。
-      // ユーザージェスチャー（クリックイベント）内であれば navigator.clipboard.readText() が使える場合も。
+      // iOSのSafariでは、ユーザージェスチャ（ボタン押下）内ならクリップボード読み取り可な場合も
+      // 機種やOSバージョン次第で動作しないこともあるため注意
       if (navigator.clipboard && navigator.clipboard.readText) {
-        navigator.clipboard.readText().then((text) => {
-          document.getElementById('inputText').value = text;
-        }).catch(err => {
-          alert('クリップボードの読み取りが許可されていません。');
-        });
+        navigator.clipboard.readText()
+          .then((text) => {
+            document.getElementById('inputText').value = text;
+          })
+          .catch(err => {
+            console.log(err);
+            alert('クリップボードの読み取りが許可されていないか、非対応です。');
+          });
       } else {
-        alert('クリップボードにアクセスできません。');
+        alert('このブラウザではクリップボードにアクセスできません。');
       }
     }
 
+    // 入力エリアのクリア
     function clearInput() {
       document.getElementById('inputText').value = '';
       document.getElementById('outputText').value = '';
     }
 
+    // テキスト変換
     function convertText() {
       let text = document.getElementById('inputText').value;
 
-      // 1) . , で改行
-      //   正規表現で置換。$1 はキャプチャしたピリオド/カンマ、$2 はその後ろに改行。
+      // 0) まず triple-dot(... ) を他の文字(例: §§§)に置き換えておき、
+      //    後でまとめて改行(\n...)にすることで、. , の改行ルールに干渉しないようにする。
+      text = text.replace(/\.\.\./g, '§§§');
+
+      // 1) . , で改行 (triple-dot 以外の単独の . や , )
       text = text.replace(/([.,])(\s*)/g, '$1\n');
 
-      // 2) ... は ... の前から改行
-      //   「...」を見つけたらその手前で改行＋... を次行へ
-      text = text.replace(/\.\.\./g, '\n...');
-
-      // 3) *で囲まれた文章は最初の*を消して改行
+      // 2) * で囲まれた文章は、最初の * を削除して改行
       //    例: hello *world* → hello\nworld
-      //    正規表現で「*...*」を検出し、その前で改行を入れてアスタリスクを削除
-      //    ※ もし複数ある場合は要注意（すべて順番に処理する）。
-      //    以下は「最初の * 直前で改行し、* と * は削除」する例
-      //    ただし、囲まれた文字列に複数行が入ると壊れる場合もあるので要注意
       text = text.replace(/\*([^*]+)\*/g, (match, p1) => {
         return '\n' + p1;
       });
 
-      // 4) "で囲まれた文章は最初の"を消して改行
+      // 3) " で囲まれた文章は、最初の " を削除して改行
       //    例: Hello "Hello world" → Hello\nHello world
-      //    「"...」の手前で改行を入れ、囲まれた文章の " は削除
       text = text.replace(/"([^"]+)"/g, (match, p1) => {
         return '\n' + p1;
       });
 
-      // 5) as のあとは改行
-      //    単純に「as 」を探して置換する例 (as + 半角スペース)
-      //    例: "Hello as world" → "Hello as\nworld"
+      // 4) as のあとは改行 (as + 半角スペースを検出)
       text = text.replace(/as\s/g, 'as\n');
 
-      // 不要な連続改行を整える、前後の空白を整形 など
-      text = text.replace(/\n{2,}/g, '\n');  // 連続する改行を1つに
-      text = text.trim();
+      // 5) 最後に triple-dot(§§§) を "\n..." に置き換える
+      text = text.replace(/§§§/g, '\n...');
 
-      // 出力に反映
+      // 連続改行の整理、前後の空白除去
+      text = text.replace(/\n{2,}/g, '\n').trim();
+
       document.getElementById('outputText').value = text;
     }
 
+    // 変換結果のコピー
     function copyOutput() {
       const outputText = document.getElementById('outputText').value;
+      const copyButton = document.getElementById('copyButton');
+
+      if (!outputText) return; // 空の場合はコピー処理しない
+
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(outputText).then(() => {
-          alert("コピーしました");
-        }, () => {
-          alert("コピーに失敗しました");
-        });
+        // 近代的ブラウザ
+        navigator.clipboard.writeText(outputText)
+          .then(() => {
+            // コピー成功 → ボタンの表示を変えて2秒後に戻す
+            copyButton.innerText = "コピー完了";
+            copyButton.classList.add("copied");
+            setTimeout(() => {
+              copyButton.innerText = "コピー";
+              copyButton.classList.remove("copied");
+            }, 2000);
+          });
       } else {
-        // 古いブラウザ等の場合: テキストエリアを選択して document.execCommand('copy')
+        // document.execCommand('copy') に頼る（古いブラウザ向け）
         const tempElem = document.getElementById('outputText');
         tempElem.select();
         document.execCommand('copy');
-        alert("コピーしました");
+
+        copyButton.innerText = "コピー完了";
+        copyButton.classList.add("copied");
+        setTimeout(() => {
+          copyButton.innerText = "コピー";
+          copyButton.classList.remove("copied");
+        }, 2000);
       }
     }
   </script>
