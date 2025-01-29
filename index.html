@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>DeepL用 改行ツール</title>
+  <style>
+    body {
+      background-color: #333;  /* ダーク背景 */
+      color: #fff;
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      margin-bottom: 8px;
+      font-size: 1em;
+      padding: 8px;
+      border: none;
+      border-radius: 4px;
+    }
+    .buttons {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    button {
+      flex: 1;
+      padding: 10px;
+      font-size: 1em;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+    .clear-btn {
+      background-color: #555;
+      color: #fff;
+    }
+    .paste-btn {
+      background-color: #777;
+      color: #fff;
+    }
+    .convert-btn {
+      background-color: #1E90FF;
+      color: #fff;
+    }
+    .copy-btn {
+      background-color: #4CAF50;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>DeepL用 改行ツール</h1>
+
+    <!-- 入力欄 -->
+    <textarea id="inputText" placeholder="ここにテキストを入力またはペーストしてください"></textarea>
+
+    <!-- ボタン類 -->
+    <div class="buttons">
+      <button class="paste-btn" onclick="pasteText()">ペースト</button>
+      <button class="clear-btn" onclick="clearInput()">クリア</button>
+      <button class="convert-btn" onclick="convertText()">変換</button>
+    </div>
+
+    <!-- 出力欄 -->
+    <textarea id="outputText" placeholder="変換結果がここに表示されます"></textarea>
+
+    <!-- コピー用ボタン -->
+    <button class="copy-btn" onclick="copyOutput()">コピー</button>
+  </div>
+
+  <script>
+    function pasteText() {
+      // モバイル Safari などではクリップボードへのアクセスに制限があるため
+      // 実機で動かない可能性があります。iOSの場合は長押しのペーストが主になります。
+      // ユーザージェスチャー（クリックイベント）内であれば navigator.clipboard.readText() が使える場合も。
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        navigator.clipboard.readText().then((text) => {
+          document.getElementById('inputText').value = text;
+        }).catch(err => {
+          alert('クリップボードの読み取りが許可されていません。');
+        });
+      } else {
+        alert('クリップボードにアクセスできません。');
+      }
+    }
+
+    function clearInput() {
+      document.getElementById('inputText').value = '';
+      document.getElementById('outputText').value = '';
+    }
+
+    function convertText() {
+      let text = document.getElementById('inputText').value;
+
+      // 1) . , で改行
+      //   正規表現で置換。$1 はキャプチャしたピリオド/カンマ、$2 はその後ろに改行。
+      text = text.replace(/([.,])(\s*)/g, '$1\n');
+
+      // 2) ... は ... の前から改行
+      //   「...」を見つけたらその手前で改行＋... を次行へ
+      text = text.replace(/\.\.\./g, '\n...');
+
+      // 3) *で囲まれた文章は最初の*を消して改行
+      //    例: hello *world* → hello\nworld
+      //    正規表現で「*...*」を検出し、その前で改行を入れてアスタリスクを削除
+      //    ※ もし複数ある場合は要注意（すべて順番に処理する）。
+      //    以下は「最初の * 直前で改行し、* と * は削除」する例
+      //    ただし、囲まれた文字列に複数行が入ると壊れる場合もあるので要注意
+      text = text.replace(/\*([^*]+)\*/g, (match, p1) => {
+        return '\n' + p1;
+      });
+
+      // 4) "で囲まれた文章は最初の"を消して改行
+      //    例: Hello "Hello world" → Hello\nHello world
+      //    「"...」の手前で改行を入れ、囲まれた文章の " は削除
+      text = text.replace(/"([^"]+)"/g, (match, p1) => {
+        return '\n' + p1;
+      });
+
+      // 5) as のあとは改行
+      //    単純に「as 」を探して置換する例 (as + 半角スペース)
+      //    例: "Hello as world" → "Hello as\nworld"
+      text = text.replace(/as\s/g, 'as\n');
+
+      // 不要な連続改行を整える、前後の空白を整形 など
+      text = text.replace(/\n{2,}/g, '\n');  // 連続する改行を1つに
+      text = text.trim();
+
+      // 出力に反映
+      document.getElementById('outputText').value = text;
+    }
+
+    function copyOutput() {
+      const outputText = document.getElementById('outputText').value;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(outputText).then(() => {
+          alert("コピーしました");
+        }, () => {
+          alert("コピーに失敗しました");
+        });
+      } else {
+        // 古いブラウザ等の場合: テキストエリアを選択して document.execCommand('copy')
+        const tempElem = document.getElementById('outputText');
+        tempElem.select();
+        document.execCommand('copy');
+        alert("コピーしました");
+      }
+    }
+  </script>
+</body>
+</html>
