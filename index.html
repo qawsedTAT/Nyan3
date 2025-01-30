@@ -68,7 +68,7 @@
     }
     /* コピー完了時の一時的な色変更用クラス */
     .copied {
-      background-color: #00c853 !important; /* より明るい緑に変化 */
+      background-color: #00c853 !important; /* より明るい緑 */
     }
   </style>
 </head>
@@ -122,11 +122,9 @@
 
       // (A) まず三点リーダ "..." を仮文字(§§§)に置き換え
       //     後続の "." や "," 処理でバラバラにされないようにする
-      //     直後の空白も合わせて取り除いておく（多めのスペースがあってもOK）
       text = text.replace(/\.\.\.\s*/g, '§§§');
 
       // (B) . , で改行
-      //     例: "Hello,world." → "Hello,\nworld.\n"
       text = text.replace(/([.,])(\s*)/g, '$1\n');
 
       // (C) * で囲まれた文章は改行（最初の * を削除して改行）
@@ -139,25 +137,23 @@
         return '\n' + p1;
       });
 
-      // (E) as のあとは改行
-      text = text.replace(/as\s/g, 'as\n');
+      // (E) as のあとは改行（今回変更：単語として一致する "as" のみ改行）
+      //     例: "has canvas as" → "has canvas\nas" 
+      //     "has" や "canvas" に含まれる "as" はスルー
+      text = text.replace(/\bas\b/g, '\nas');
 
-      // (F) 最後に三点リーダ置き換え ( §§§ → "...\n" )
-      //     → "Hello...\nworld." のように「三点リーダ＋改行」
+      // (F) 三点リーダ置き換え ( §§§ → "...\n" )
+      //     → 例: "Hello... world." → "Hello...\nworld."
       text = text.replace(/§§§/g, '...\n');
 
       // (G) 連続改行の整理、行頭行末の余分なスペース除去
-      //     - まず連続改行を1つにまとめる
-      text = text.replace(/\n{2,}/g, '\n');
-
-      //     - 各行ごとに trim() して再結合
+      text = text.replace(/\n{2,}/g, '\n'); // 連続改行 → 1つに
       text = text
         .split('\n')
-        .map(line => line.trim())
+        .map(line => line.trim()) // 各行トリム
         .join('\n')
-        .trim(); // 全体の先頭＆末尾の改行や空白も除去
+        .trim(); // 全体の先頭末尾もトリム
 
-      // 結果を表示
       document.getElementById('outputText').value = text;
     }
 
@@ -165,7 +161,7 @@
     function copyOutput() {
       const outputText = document.getElementById('outputText').value;
       const copyButton = document.getElementById('copyButton');
-      if (!outputText) return; // 空の場合はコピー処理しない
+      if (!outputText) return;
 
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(outputText).then(() => {
@@ -177,7 +173,7 @@
           }, 2000);
         });
       } else {
-        // 古いブラウザ向けフォールバック
+        // 古いブラウザフォールバック
         const tempElem = document.getElementById('outputText');
         tempElem.select();
         document.execCommand('copy');
