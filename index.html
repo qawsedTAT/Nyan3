@@ -4,14 +4,10 @@
   <meta charset="UTF-8" />
   <title>DeepL用 改行ツール</title>
 
-  <!-- iPhoneでの表示を最適化するためのタグ -->
+  <!-- iPhoneでのホーム画面アプリ化用メタタグ -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-
-  <!-- もしホーム画面用アイコンを設定したい場合は以下を追加
-  <link rel="apple-touch-icon" href="icon.png" />
-  -->
 
   <style>
     body {
@@ -72,7 +68,7 @@
     }
     /* コピー完了時の一時的な色変更用クラス */
     .copied {
-      background-color: #00c853 !important; /* より明るい緑など */
+      background-color: #00c853 !important; /* より明るい緑に変化 */
     }
   </style>
 </head>
@@ -100,8 +96,6 @@
   <script>
     // クリップボードからペースト
     function pasteText() {
-      // iOSのSafariでは、ユーザージェスチャ（ボタン押下）内ならクリップボード読み取り可な場合も
-      // 機種やOSバージョン次第で動作しないこともあるため注意
       if (navigator.clipboard && navigator.clipboard.readText) {
         navigator.clipboard.readText()
           .then((text) => {
@@ -126,34 +120,44 @@
     function convertText() {
       let text = document.getElementById('inputText').value;
 
-      // 0) まず triple-dot(... ) を他の文字(例: §§§)に置き換えておき、
-      //    後でまとめて改行(\n...)にすることで、. , の改行ルールに干渉しないようにする。
-      text = text.replace(/\.\.\./g, '§§§');
+      // (A) まず三点リーダ "..." を仮文字(§§§)に置き換え
+      //     後続の "." や "," 処理でバラバラにされないようにする
+      //     直後の空白も合わせて取り除いておく（多めのスペースがあってもOK）
+      text = text.replace(/\.\.\.\s*/g, '§§§');
 
-      // 1) . , で改行 (triple-dot 以外の単独の . や , )
+      // (B) . , で改行
+      //     例: "Hello,world." → "Hello,\nworld.\n"
       text = text.replace(/([.,])(\s*)/g, '$1\n');
 
-      // 2) * で囲まれた文章は、最初の * を削除して改行
-      //    例: hello *world* → hello\nworld
+      // (C) * で囲まれた文章は改行（最初の * を削除して改行）
       text = text.replace(/\*([^*]+)\*/g, (match, p1) => {
         return '\n' + p1;
       });
 
-      // 3) " で囲まれた文章は、最初の " を削除して改行
-      //    例: Hello "Hello world" → Hello\nHello world
+      // (D) " で囲まれた文章は改行（最初の " を削除して改行）
       text = text.replace(/"([^"]+)"/g, (match, p1) => {
         return '\n' + p1;
       });
 
-      // 4) as のあとは改行 (as + 半角スペースを検出)
+      // (E) as のあとは改行
       text = text.replace(/as\s/g, 'as\n');
 
-      // 5) 最後に triple-dot(§§§) を "\n..." に置き換える
-      text = text.replace(/§§§/g, '\n...');
+      // (F) 最後に三点リーダ置き換え ( §§§ → "...\n" )
+      //     → "Hello...\nworld." のように「三点リーダ＋改行」
+      text = text.replace(/§§§/g, '...\n');
 
-      // 連続改行の整理、前後の空白除去
-      text = text.replace(/\n{2,}/g, '\n').trim();
+      // (G) 連続改行の整理、行頭行末の余分なスペース除去
+      //     - まず連続改行を1つにまとめる
+      text = text.replace(/\n{2,}/g, '\n');
 
+      //     - 各行ごとに trim() して再結合
+      text = text
+        .split('\n')
+        .map(line => line.trim())
+        .join('\n')
+        .trim(); // 全体の先頭＆末尾の改行や空白も除去
+
+      // 結果を表示
       document.getElementById('outputText').value = text;
     }
 
@@ -161,23 +165,19 @@
     function copyOutput() {
       const outputText = document.getElementById('outputText').value;
       const copyButton = document.getElementById('copyButton');
-
       if (!outputText) return; // 空の場合はコピー処理しない
 
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        // 近代的ブラウザ
-        navigator.clipboard.writeText(outputText)
-          .then(() => {
-            // コピー成功 → ボタンの表示を変えて2秒後に戻す
-            copyButton.innerText = "コピー完了";
-            copyButton.classList.add("copied");
-            setTimeout(() => {
-              copyButton.innerText = "コピー";
-              copyButton.classList.remove("copied");
-            }, 2000);
-          });
+        navigator.clipboard.writeText(outputText).then(() => {
+          copyButton.innerText = "コピー完了";
+          copyButton.classList.add("copied");
+          setTimeout(() => {
+            copyButton.innerText = "コピー";
+            copyButton.classList.remove("copied");
+          }, 2000);
+        });
       } else {
-        // document.execCommand('copy') に頼る（古いブラウザ向け）
+        // 古いブラウザ向けフォールバック
         const tempElem = document.getElementById('outputText');
         tempElem.select();
         document.execCommand('copy');
